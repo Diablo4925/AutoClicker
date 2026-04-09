@@ -109,13 +109,13 @@ local StatusThread = nil
 local function WriteStatus(msg, isFastMode)
     if StatusThread then task.cancel(StatusThread); StatusThread = nil end
     if isFastMode then
-        -- แบบโหมดว่องไว (อัปเดตหน้าจอทันที ไม่ติดลูปตัวอักษร)
+
         if os.clock() - State.LastUiUpdate > 0.03 then
             StatusLabel.Text = msg
             State.LastUiUpdate = os.clock()
         end
     else
-        -- แบบมี Animation ปกติ
+
         StatusThread = task.spawn(function()
             StatusLabel.Text = ""
             for i = 1, #msg do StatusLabel.Text = string.sub(msg, 1, i); task.wait(0.012) end
@@ -219,11 +219,11 @@ local function Start()
                     if d.delay > 0 then 
                         task.wait(d.delay/1000) 
                     else
-                        if idx % 5 == 0 then task.wait() end -- ป้องกันเกมค้างเมื่อ Delay = 0
+                        if idx % 5 == 0 then task.wait() end
                     end
                 end
                 
-                -- ให้รอถ้าเป็นคิวเปล่า หรือ Delay ทั้งหมดไวจัด
+              
                 if (#State.PositionQueue == 0) or delayVal == 0 then task.wait() end
             end
         end
