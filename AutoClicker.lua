@@ -36,7 +36,8 @@ local State = {
     PositionQueue = {},
     Connections   = {},
     WindowPos     = UDim2.new(0.5, -240, 0.5, -155),
-    IconPos       = UDim2.new(0.9, 0, 0.8, 0)
+    IconPos       = UDim2.new(0.9, 0, 0.8, 0),
+    LastUiUpdate  = 0 -- เอาไว้กัน UI กระตุกตอนสปีดเยอะๆ
 }
 
 local function Terminate()
@@ -104,9 +105,22 @@ local CloseBtn = create("TextButton", { Text = "X", Size = UDim2.new(0, 38, 0, 3
 
 local StatusLabel = create("TextLabel", { Text = "READY", Size = UDim2.new(1, -40, 0, 30), Position = UDim2.new(0, 22, 1, -38), BackgroundTransparency = 1, TextColor3 = Theme.Accent, TextSize = 9, Font = Theme.FontBold, TextXAlignment = Enum.TextXAlignment.Left, Parent = Main })
 
-local function WriteStatus(msg)
-    StatusLabel.Text = ""
-    for i = 1, #msg do StatusLabel.Text = string.sub(msg, 1, i); task.wait(0.012) end
+local StatusThread = nil
+local function WriteStatus(msg, isFastMode)
+    if StatusThread then task.cancel(StatusThread); StatusThread = nil end
+    if isFastMode then
+        -- แบบโหมดว่องไว (อัปเดตหน้าจอทันที ไม่ติดลูปตัวอักษร)
+        if os.clock() - State.LastUiUpdate > 0.03 then
+            StatusLabel.Text = msg
+            State.LastUiUpdate = os.clock()
+        end
+    else
+        -- แบบมี Animation ปกติ
+        StatusThread = task.spawn(function()
+            StatusLabel.Text = ""
+            for i = 1, #msg do StatusLabel.Text = string.sub(msg, 1, i); task.wait(0.012) end
+        end)
+    end
 end
 
 local function makeTactileBtn(text, parent, x, y, w, h, cb, isAccent)
@@ -189,16 +203,28 @@ local function Start()
             cur = cur + 1
             if State.ClickMode == "FOLLOW" then
                 local p = UIS:GetMouseLocation()
-                WriteStatus(isInf and string.format("[INF] ROUND: %d | ACTIVE", cur) or string.format("REP: %d/%d | ACTIVE", cur, rL))
-                VIM:SendMouseButtonEvent(p.X, p.Y, 0, true, game, 1); if delayVal >= 15 then task.wait(0.01) end; VIM:SendMouseButtonEvent(p.X, p.Y, 0, false, game, 1)
-                if delayVal > 0 then task.wait(delayVal/1000) end
+                WriteStatus(isInf and string.format("[INF] ROUND: %d | ACTIVE", cur) or string.format("REP: %d/%d | ACTIVE", cur, rL), true)
+                VIM:SendMouseButtonEvent(p.X, p.Y, 0, true, game, 1)
+                VIM:SendMouseButtonEvent(p.X, p.Y, 0, false, game, 1)
+                
+                if delayVal > 0 then task.wait(delayVal/1000) else task.wait() end
             else
                 for idx, d in ipairs(State.PositionQueue) do
                     if not State.IsRunning then break end
-                    WriteStatus(string.format("REP: %d/%d | PATH: #%d", cur, rL, idx))
-                    VIM:SendMouseButtonEvent(d.x, d.y, 0, true, game, 1); if d.delay >= 15 then task.wait(0.01) end; VIM:SendMouseButtonEvent(d.x, d.y, 0, false, game, 1)
-                    if d.delay > 0 then task.wait(d.delay/1000) end
+                    WriteStatus(string.format("REP: %d/%d | PATH: #%d", cur, rL, idx), true)
+                    
+                    VIM:SendMouseButtonEvent(d.x, d.y, 0, true, game, 1)
+                    VIM:SendMouseButtonEvent(d.x, d.y, 0, false, game, 1)
+                    
+                    if d.delay > 0 then 
+                        task.wait(d.delay/1000) 
+                    else
+                        if idx % 5 == 0 then task.wait() end -- ป้องกันเกมค้างเมื่อ Delay = 0
+                    end
                 end
+                
+                -- ให้รอถ้าเป็นคิวเปล่า หรือ Delay ทั้งหมดไวจัด
+                if (#State.PositionQueue == 0) or delayVal == 0 then task.wait() end
             end
         end
         Stop()
